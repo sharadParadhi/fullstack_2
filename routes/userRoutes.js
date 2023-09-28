@@ -2,7 +2,8 @@ const express = require("express")
 const { User } = require("../models/userModel");
 const bcrypt = require("bcrypt")
 const bodyParser = require('body-parser');
-const jwt = require("jsonwebtoken")
+const jwt = require("jsonwebtoken");
+const { BlackListModel } = require("../models/blackListModel");
 require("dotenv").config()
 
 
@@ -52,32 +53,27 @@ userRoutes.post("/signup", async (req, res) => {
 })
 
 
-userRoutes.post("/login", async (req, res) => {
-    const { email, password } = req.body
-    try {
-        let userExist = await User.findOne({ email })
-        console.lo("user",userExist)
-        if (userExist) {
-            bcrypt.compare(password, userExist.password, (err,result ) => {
-                if (result) {
-                   
-                    const token = jwt.sign({ userID: userExist._id, username: userExist.name }, process.env.SECRETKEY)
-                    res.status(200).json({msg:`${userExist.email} login Successfully`})
-                }else{
-                  
-                    res.status(400).json({"msg":`wrong credential`})
-                }
-            })
+userRoutes.post("/login",async(req,res)=>{
+    const {email,password}=req.body
+    try{
+       let user=await User.findOne({email})
+       if(user){
+        bcrypt.compare(password,user.password,(error,decoded)=>{
+            if(decoded){
+                let token=jwt.sign({userID:user._id,username:user.name},process.env.SECRETKEY,{expiresIn:'1h'})
+                res.status(200).json({"msg":`${email} logged successfully`,token})
+            }else{
 
-        } else {
-            res.status(400).json({ "msg": `${email} user is not exist please registerd first!` })
-        }
-
-    } catch (err) {
-
+                res.status(400).json({"error":"invalid credential"})
+            }
+        })
+       }else{
+        res.status(400).json({"error":`${email} does not exist!`})
+       }
+    }catch(err){
+        res.status(500).json({"error":err})
     }
 })
-
 
 userRoutes.get("/",async(req,res)=>{
     try{
@@ -86,6 +82,24 @@ userRoutes.get("/",async(req,res)=>{
 
     }catch(err){
         res.status(500).json("erro")
+    }
+})
+
+
+userRoutes.get("/logout",async(req,res)=>{
+    try{
+        const token=req.headers.authorization?.split(" ")[1] || null;
+        token && (await BlackListModel.updateMany({},{$push:{blacklist:[token]}}))
+       
+       //await BlackListModel.push(token)
+        
+            return res.status(200).json({"msg":"user logout sucessfully"})
+        
+
+        
+
+    }catch(err){
+        res.status(500).json({"error":err})
     }
 })
 
